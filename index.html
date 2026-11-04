@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="シュート撮影">
+<meta name="theme-color" content="#05080f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>シュート撮影ガイド</title>
+<style>
+:root{
+  --bg:#05080f; --panel:rgba(8,12,22,.72); --ink:#f2f5fa; --ink2:#a9b4c6;
+  --ok:#2ecf8f; --warn:#f2b632; --ng:#ff5a4f; --guide:#7fe3ff; --ball:#ffc861;
+  --f:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--f);overflow:hidden;overscroll-behavior:none}
+#stage{position:fixed;inset:0}
+video,#ov{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#ov{pointer-events:none}
+/* the big status border, readable from 2-3 m */
+#frame{position:fixed;inset:0;pointer-events:none;border:14px solid var(--ng);transition:border-color .25s}
+#frame.ok{border-color:var(--ok)} #frame.warn{border-color:var(--warn)} #frame.rec{border-color:var(--ng);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{border-color:transparent}}
+@media (prefers-reduced-motion:reduce){#frame.rec{animation:none}}
+.top{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 22px) max(22px,env(safe-area-inset-right,0px)) 0 max(22px,env(safe-area-inset-left,0px));display:flex;gap:8px;align-items:center}
+.seg{display:flex;background:var(--panel);border-radius:999px;padding:3px}
+.seg button{font:600 14px var(--f);color:var(--ink2);background:none;border:0;border-radius:999px;padding:8px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#05080f}
+.spacer{flex:1}
+.icon{font:600 13px var(--f);color:var(--ink);background:var(--panel);border:0;border-radius:999px;padding:9px 12px}
+#msg{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 78px);width:max-content;max-width:min(88vw,360px);background:var(--panel);border-radius:14px;padding:10px 16px;font:700 18px/1.4 var(--f);text-align:center}
+.checks{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 112px);display:flex;justify-content:center;gap:6px;padding:0 16px;flex-wrap:wrap}
+.chk{display:flex;align-items:center;gap:6px;background:var(--panel);border-radius:999px;padding:7px 11px;font:600 13px var(--f)}
+.chk i{width:10px;height:10px;border-radius:50%;background:var(--ng)}
+.chk.ok i{background:var(--ok)} .chk.warn i{background:var(--warn)}
+.bottom{position:fixed;left:0;right:0;bottom:0;padding:0 24px calc(env(safe-area-inset-bottom,0px) + 22px);display:flex;align-items:center;justify-content:space-between}
+#rec{width:74px;height:74px;border-radius:50%;border:5px solid #fff;background:transparent;padding:0;display:grid;place-items:center}
+#rec span{width:54px;height:54px;border-radius:50%;background:var(--ng);transition:all .2s}
+#rec.on span{width:28px;height:28px;border-radius:6px}
+.side{width:96px;font:600 12px/1.3 var(--f);color:var(--ink2)}
+.side label{display:flex;gap:6px;align-items:center;color:var(--ink)}
+.side input{width:18px;height:18px;accent-color:var(--ok)}
+#fps{text-align:right}
+/* start sheet */
+#start{position:fixed;inset:0;background:radial-gradient(120% 80% at 50% 0%,#12203a 0%,#05080f 60%);display:flex;flex-direction:column;justify-content:center;gap:18px;padding:32px max(26px,env(safe-area-inset-left,0px)) 32px max(26px,env(safe-area-inset-right,0px));z-index:5}
+#start h1{font:800 30px/1.25 var(--f);margin:0}
+#start p{margin:0;color:var(--ink2);font:500 15px/1.7 var(--f)}
+#start ol{margin:0;padding-left:1.3em;color:var(--ink);font:500 15px/1.8 var(--f)}
+#go{font:800 18px var(--f);color:#05080f;background:var(--ok);border:0;border-radius:14px;padding:16px}
+#err{color:var(--ng);font:600 14px/1.6 var(--f);min-height:1em}
+#sheet{position:fixed;left:0;right:0;bottom:0;background:#0d1424;border-radius:20px 20px 0 0;padding:18px 22px calc(env(safe-area-inset-bottom,0px) + 22px);display:none;z-index:6}
+#sheet.show{display:block}
+#sheet video{position:static;width:100%;height:auto;max-height:42vh;border-radius:12px;background:#000;object-fit:contain}
+#sheet .row{display:flex;gap:10px;margin-top:12px}
+#sheet button{flex:1;font:700 16px var(--f);border:0;border-radius:12px;padding:14px}
+#save{background:var(--ok);color:#05080f} #again{background:#26324a;color:var(--ink)}
+#sinfo{color:var(--ink2);font:500 13px var(--f);margin-top:8px}
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="v" playsinline muted autoplay></video>
+  <canvas id="ov"></canvas>
+</div>
+<div id="frame"></div>
+
+<div class="top">
+  <div class="seg" role="group" aria-label="撮影の向き">
+    <button id="mA" aria-pressed="true">横から</button>
+    <button id="mB" aria-pressed="false">後ろから</button>
+  </div>
+  <div class="spacer"></div>
+  <button class="icon" id="voice" aria-pressed="true">音声 ON</button>
+</div>
+<div id="msg">準備中…</div>
+
+<div class="checks">
+  <div class="chk" id="cLevel"><i></i>水平</div>
+  <div class="chk" id="cDist"><i></i>距離</div>
+  <div class="chk" id="cPos"><i></i>位置</div>
+  <div class="chk" id="cLight"><i></i>明るさ</div>
+  <div class="chk" id="cFps"><i></i><span id="fpsTxt">fps</span></div>
+</div>
+
+<div class="bottom">
+  <div class="side"><label><input type="checkbox" id="auto" checked>自動で録画</label></div>
+  <button id="rec" aria-label="録画の開始と停止"><span></span></button>
+  <div class="side" id="fps">10秒で自動停止</div>
+</div>
+
+<section id="start">
+  <h1>シュート撮影ガイド</h1>
+  <p>人型の枠に体を合わせるだけで、解析に使える位置と距離で撮れます。撮影中は画面が見えないので、音声と画面の縁の色で知らせます。</p>
+  <ol>
+    <li>iPhoneを三脚に縦向きで立てる</li>
+    <li>「横から」はシュートする手の側、約2.3m離れる</li>
+    <li>枠の縁が<b style="color:var(--ok)">緑</b>になったら、合図のあと録画が始まります</li>
+  </ol>
+  <button id="go">カメラを起動する</button>
+  <div id="err" role="alert"></div>
+  <p style="font-size:12px">試作版：ブラウザでは最大60fps程度で撮影されます。240fpsはiPhoneアプリ版で対応します。</p>
+</section>
+
+<section id="sheet" aria-label="撮影した動画">
+  <video id="pv" playsinline controls></video>
+  <div id="sinfo"></div>
+  <div class="row"><button id="again">撮り直す</button><button id="save">保存・共有</button></div>
+</section>
+
+<script type="module">
+// ---------- guide geometry (fractions of the visible frame, portrait) ----------
+// From the camera layout: 1x lens, ~2.3 m (side) / ~2.5 m (rear), phone level at ~1.8 m.
+const GUIDE = {
+  A: { noseY: 0.57, bodyX: 0.38, span: 0.32, label: '横から（シュートする手の側）', ballZone: [0.50, 0.04, 0.96, 0.42] },
+  B: { noseY: 0.55, bodyX: 0.50, span: 0.29, label: '後ろから（リングの線上）',   ballZone: [0.30, 0.02, 0.70, 0.38] },
+};
+const TOL = { span: 0.04, y: 0.05, x: 0.08, level: 4 };
+const REC_MAX_MS = 10000, HOLD_MS = 1500;
+
+const $ = id => document.getElementById(id);
+const v = $('v'), ov = $('ov'), ctx = ov.getContext('2d');
+let mode = 'A', voiceOn = true, autoRec = true;
+let orient = { beta: null, gamma: null }, landmarker = null, modelState = 'loading', lastPose = null, stream = null;
+let state = {}, okSince = 0, recording = false, recorder = null, chunks = [], recTimer = 0, countdown = false;
+let lastSpoken = '', lastSpokenAt = 0, lastBlob = null;
+
+// ---------- UI wiring ----------
+const setMode = m => { mode = m; $('mA').setAttribute('aria-pressed', m === 'A'); $('mB').setAttribute('aria-pressed', m === 'B'); say(GUIDE[m].label, true); };
+$('mA').onclick = () => setMode('A'); $('mB').onclick = () => setMode('B');
+$('voice').onclick = () => { voiceOn = !voiceOn; $('voice').textContent = voiceOn ? '音声 ON' : '音声 OFF'; $('voice').setAttribute('aria-pressed', voiceOn); };
+$('auto').onchange = e => { autoRec = e.target.checked; };
+$('rec').onclick = () => recording ? stopRec() : startRec();
+$('again').onclick = () => { $('sheet').classList.remove('show'); okSince = 0; };
+$('save').onclick = saveClip;
+
+// ---------- voice ----------
+function say(text, force = false) {
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+  const now = performance.now();
+  if (!force && (text === lastSpoken && now - lastSpokenAt < 6000 || now - lastSpokenAt < 2500)) return;
+  lastSpoken = text; lastSpokenAt = now;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text); u.lang = 'ja-JP'; u.rate = 1.05; speechSynthesis.speak(u);
+}
+
+// ---------- start: camera + motion + model ----------
+$('go').onclick = async () => {
+  $('err').textContent = '';
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
+      try { await DeviceOrientationEvent.requestPermission(); } catch (_) {}
+    }
+    window.addEventListener('deviceorientation', e => { orient = { beta: e.beta, gamma: e.gamma }; });
+    say('カメラを起動します', true);
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 240 } },
+    });
+    v.srcObject = stream; await v.play();
+    const fps = Math.round(stream.getVideoTracks()[0].getSettings().frameRate || 30);
+    $('fpsTxt').textContent = fps + 'fps';
+    state.fps = fps >= 120 ? 'ok' : 'warn';
+    $('start').style.display = 'none';
+    loadModel();
+    requestAnimationFrame(loop);
+  } catch (e) {
+    $('err').textContent = 'カメラを起動できませんでした。Safariの設定でカメラを許可してください（' + (e.name || e) + '）';
+  }
+};
+
+async function loadModel() {
+  $('msg').textContent = '人の認識を準備中…';
+  try {
+    const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+    const files = await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    landmarker = await vision.PoseLandmarker.createFromOptions(files, {
+      baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate: 'GPU' },
+      runningMode: 'VIDEO', numPoses: 1,
+    });
+    modelState = 'ready';
+  } catch (e) {
+    modelState = 'failed';
+  }
+}
+
+// ---------- mapping video pixels <-> screen (object-fit: cover) ----------
+function viewRect() {
+  const W = ov.clientWidth, H = ov.clientHeight, vw = v.videoWidth || 9, vh = v.videoHeight || 16;
+  const s = Math.max(W / vw, H / vh);
+  return { W, H, s, ox: (W - vw * s) / 2, oy: (H - vh * s) / 2, vw, vh };
+}
+// landmark (0..1 of video) -> fraction of the visible screen
+function toScreen(p, r) { return { x: (p.x * r.vw * r.s + r.ox) / r.W, y: (p.y * r.vh * r.s + r.oy) / r.H }; }
+
+// ---------- checks ----------
+let lastDetect = 0, sampleCanvas = document.createElement('canvas');
+function evaluate(now) {
+  const g = GUIDE[mode], r = viewRect(), tips = [];
+  // level: phone upright in portrait => beta ~ 90, gamma ~ 0
+  if (orient.beta == null) { state.level = 'warn'; }
+  else {
+    const db = orient.beta - 90, dg = orient.gamma;
+    state.level = Math.abs(db) < TOL.level && Math.abs(dg) < TOL.level ? 'ok' : 'ng';
+    if (state.level === 'ng') tips.push(Math.abs(dg) >= TOL.level ? (dg > 0 ? 'スマホが右に傾いています' : 'スマホが左に傾いています') : (db > 0 ? 'スマホが上を向いています' : 'スマホが下を向いています'));
+  }
+  // pose-based distance and position
+  if (landmarker && now - lastDetect > 66 && v.readyState >= 2) {
+    lastDetect = now;
+    const res = landmarker.detectForVideo(v, now);
+    lastPose = res.landmarks && res.landmarks[0] ? res.landmarks[0] : null;
+  }
+  if (!lastPose) {
+    state.dist = state.pos = 'ng'; tips.push(modelState === 'ready' ? '枠の中に全身が入るように立ってください' : modelState === 'failed' ? '人の認識を読み込めませんでした。電波の良い場所で開き直してください' : '人の認識を準備中です');
+  } else {
+    const L = i => toScreen(lastPose[i], r);
+    const nose = L(0), sh = mid(L(11), L(12)), kn = mid(L(25), L(26)), hipC = mid(L(23), L(24));
+    const span = kn.y - sh.y;
+    if (Math.abs(span - g.span) <= TOL.span) state.dist = 'ok';
+    else { state.dist = 'ng'; tips.push(span > g.span ? '1歩下がってください' : '1歩近づいてください'); }
+    const dy = nose.y - g.noseY, dx = hipC.x - g.bodyX;
+    if (Math.abs(dy) <= TOL.y && Math.abs(dx) <= TOL.x) state.pos = 'ok';
+    else {
+      state.pos = 'ng';
+      if (Math.abs(dy) > TOL.y) tips.push(dy > 0 ? 'スマホを少し下げてください' : 'スマホを少し上げてください');
+      else tips.push(dx > 0 ? (mode === 'A' ? '少し左に立ってください' : '少し左に寄ってください') : '少し右に立ってください');
+    }
+    // light: person region vs the rest (backlight)
+    state.light = lightCheck(r, sh, kn, tips);
+  }
+  return tips;
+}
+const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+function lightCheck(r, sh, kn, tips) {
+  const w = 36, h = 64; sampleCanvas.width = w; sampleCanvas.height = h;
+  const c = sampleCanvas.getContext('2d', { willReadFrequently: true });
+  // sample what is on screen (cover crop)
+  const sx = -r.ox / r.s, sy = -r.oy / r.s, sw = r.W / r.s, sh2 = r.H / r.s;
+  c.drawImage(v, sx, sy, sw, sh2, 0, 0, w, h);
+  const d = c.getImageData(0, 0, w, h).data;
+  let inS = 0, inN = 0, outS = 0, outN = 0;
+  const x0 = Math.floor((sh.x - 0.08) * w), x1 = Math.ceil((sh.x + 0.08) * w), y0 = Math.floor(sh.y * h), y1 = Math.ceil(kn.y * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, Y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    if (x >= x0 && x <= x1 && y >= y0 && y <= y1) { inS += Y; inN++; } else { outS += Y; outN++; }
+  }
+  const pin = inS / Math.max(1, inN), pout = outS / Math.max(1, outN);
+  if (pout > 200 && pout - pin > 110) { tips.push('逆光です。太陽を背にする向きに変えてください'); return 'ng'; }
+  if ((pin + pout) / 2 < 45) { tips.push('暗すぎます。明るい場所で撮ってください'); return 'ng'; }
+  return 'ok';
+}
+
+// ---------- drawing ----------
+function draw(allOk) {
+  const r = viewRect(), W = r.W, H = r.H, dpr = devicePixelRatio || 1;
+  if (ov.width !== Math.round(W * dpr)) { ov.width = Math.round(W * dpr); ov.height = Math.round(H * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  const g = GUIDE[mode], col = allOk ? '#2ecf8f' : '#7fe3ff';
+  // ball zone
+  const [bx0, by0, bx1, by1] = g.ballZone;
+  ctx.save(); ctx.setLineDash([8, 7]); ctx.strokeStyle = '#ffc861'; ctx.lineWidth = 2;
+  ctx.strokeRect(bx0 * W, by0 * H, (bx1 - bx0) * W, (by1 - by0) * H);
+  ctx.fillStyle = 'rgba(255,200,97,.9)'; ctx.font = '600 13px ' + getComputedStyle(document.body).fontFamily;
+  ctx.fillText('ボールの通り道（切らない）', bx0 * W + 8, by1 * H - 8); ctx.restore();
+  // silhouette built from target landmarks: a soft filled body plus a dashed outline
+  const u = g.span * H;                       // shoulder-knee span in px
+  const cx = g.bodyX * W, noseY = g.noseY * H;
+  const shY = noseY + 0.16 * u, hipY = shY + 0.52 * u, knY = shY + u, ftY = knY + 0.48 * u;
+  const head = 0.12 * u;
+  const limbs = [];                            // [x1,y1,x2,y2,width]
+  if (mode === 'A') {
+    const t = 0.24 * u;                        // torso depth seen from the side
+    limbs.push([cx, shY + 0.06 * u, cx - 0.02 * u, hipY, t]);
+    limbs.push([cx - 0.02 * u, hipY, cx - 0.04 * u, knY, 0.17 * u]);
+    limbs.push([cx - 0.04 * u, knY, cx - 0.05 * u, ftY, 0.12 * u]);
+    limbs.push([cx + 0.02 * u, shY, cx + 0.22 * u, shY - 0.16 * u, 0.10 * u]);
+    limbs.push([cx + 0.22 * u, shY - 0.16 * u, cx + 0.26 * u, shY - 0.42 * u, 0.08 * u]);
+  } else {
+    const sw = 0.2 * u;
+    limbs.push([cx, shY + 0.05 * u, cx, hipY, 0.40 * u]);
+    for (const s of [-1, 1]) {
+      limbs.push([cx + s * 0.08 * u, hipY, cx + s * 0.09 * u, knY, 0.15 * u]);
+      limbs.push([cx + s * 0.09 * u, knY, cx + s * 0.09 * u, ftY, 0.11 * u]);
+      limbs.push([cx + s * sw, shY, cx + s * sw * 1.1, shY - 0.28 * u, 0.09 * u]);
+      limbs.push([cx + s * sw * 1.1, shY - 0.28 * u, cx + s * sw * 0.5, shY - 0.5 * u, 0.08 * u]);
+    }
+  }
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // soft fill
+  ctx.strokeStyle = allOk ? 'rgba(46,207,143,.28)' : 'rgba(127,227,255,.26)'; ctx.fillStyle = ctx.strokeStyle;
+  for (const [x1, y1, x2, y2, w] of limbs) { ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  ctx.beginPath(); ctx.arc(cx, noseY - head * 0.2, head, 0, 7); ctx.fill();
+  // dashed outline of the head and a centre line, so it reads from a distance
+  ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
+  ctx.beginPath(); ctx.arc(cx, noseY - head * 0.2, head, 0, 7); ctx.stroke();
+  for (const [x1, y1, x2, y2] of limbs) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  // the ball where it is held at the set point
+  ctx.strokeStyle = '#ffc861'; ctx.lineWidth = 2.5;
+  const ballR = 0.13 * u;
+  if (mode === 'A') { ctx.beginPath(); ctx.arc(cx + 0.30 * u, shY - 0.56 * u, ballR, 0, 7); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.arc(cx, shY - 0.64 * u, ballR, 0, 7); ctx.stroke(); }
+  ctx.restore();
+  // detected skeleton (thin)
+  if (lastPose) {
+    const P = i => { const p = toScreen(lastPose[i], r); return [p.x * W, p.y * H]; };
+    ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2;
+    for (const [a, b] of [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [24, 26], [25, 27], [26, 28]]) {
+      const A = P(a), B = P(b); ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function setChk(id, s) { const e = $(id); e.classList.toggle('ok', s === 'ok'); e.classList.toggle('warn', s === 'warn'); }
+
+// ---------- main loop ----------
+function loop(now) {
+  if (!$('sheet').classList.contains('show')) {
+    const tips = evaluate(now);
+    setChk('cLevel', state.level); setChk('cDist', state.dist); setChk('cPos', state.pos); setChk('cLight', state.light); setChk('cFps', state.fps);
+    const allOk = ['level', 'dist', 'pos', 'light'].every(k => state[k] === 'ok');
+    draw(allOk);
+    const fr = $('frame');
+    fr.className = recording ? 'rec' : (allOk ? 'ok' : (tips.length <= 1 ? 'warn' : ''));
+    if (recording) { $('msg').textContent = '録画中　シュートしてください'; }
+    else if (allOk) {
+      $('msg').textContent = autoRec ? 'OK　このまま待ってください' : 'OK　録画できます';
+      if (!okSince) okSince = now;
+      if (autoRec && !countdown && now - okSince > HOLD_MS) runCountdown();
+    } else {
+      okSince = 0; $('msg').textContent = tips[0] || '調整中';
+      if (tips[0]) say(tips[0]);
+    }
+  }
+  requestAnimationFrame(loop);
+}
+
+async function runCountdown() {
+  countdown = true;
+  say('準備オーケー。3、2、1', true);
+  await new Promise(r => setTimeout(r, 2600));
+  countdown = false;
+  if (['level', 'dist', 'pos', 'light'].every(k => state[k] === 'ok') && !recording) startRec();
+}
+
+// ---------- recording ----------
+function pickType() {
+  for (const t of ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']) if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+  return '';
+}
+function startRec() {
+  if (!stream || recording) return;
+  const type = pickType(); chunks = [];
+  try { recorder = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 16e6 } : undefined); }
+  catch (e) { $('msg').textContent = 'この端末では録画できませんでした'; return; }
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = () => {
+    lastBlob = new Blob(chunks, { type: recorder.mimeType || 'video/mp4' });
+    $('pv').src = URL.createObjectURL(lastBlob);
+    const fps = $('fpsTxt').textContent;
+    $('sinfo').textContent = `${GUIDE[mode].label}・${fps}・${(lastBlob.size / 1e6).toFixed(1)} MB`;
+    $('sheet').classList.add('show');
+  };
+  recorder.start(); recording = true; $('rec').classList.add('on');
+  say('録画を始めます', true);
+  recTimer = setTimeout(stopRec, REC_MAX_MS);
+}
+function stopRec() {
+  if (!recording) return;
+  clearTimeout(recTimer); recording = false; $('rec').classList.remove('on');
+  recorder.stop(); say('録画を止めました', true);
+}
+async function saveClip() {
+  if (!lastBlob) return;
+  const ext = (lastBlob.type || '').includes('webm') ? 'webm' : 'mp4';
+  const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+  const file = new File([lastBlob], `shot_${mode === 'A' ? 'side' : 'rear'}_${stamp}.${ext}`, { type: lastBlob.type || 'video/mp4' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'シュート動画' }); return; }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+}
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
